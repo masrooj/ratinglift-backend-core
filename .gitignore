@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.env
+.env.*
+.venv/
+venv/
+pytest_cache/
+htmlcov/
+.DS_Store
+.idea/
+.vscode/
+.build/
+
+# Docker
+*.log
+docker-compose.override.yml
