@@ -10,5 +10,6 @@ pydantic
 pydantic-settings
 passlib[bcrypt]
 httpx
+requests
 pytest
 pytest-asyncio
