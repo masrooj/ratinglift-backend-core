@@ -1,6 +1,9 @@
 # ratinglift-backend-core
 
-Production-grade FastAPI backend for RatingLift with health checks, observability, structured logging, and modular services.
+Production-grade FastAPI backend for **RatingLift** — a multi-tenant reputation, review, and AI automation platform.
+Includes authentication (password, social, MFA/TOTP, sessions), RBAC, multi-database persistence (PostgreSQL + MongoDB + Redis), Alembic migrations, structured JSON logging, and a modular domain-driven architecture.
+
+---
 
 ## Quick Start
 
@@ -8,166 +11,211 @@ Production-grade FastAPI backend for RatingLift with health checks, observabilit
 - Docker & Docker Compose
 - Python 3.11+ (for local development)
 
-### 1. Start the Development Environment
+### 1. Configure environment
+
+Create a `.env.dev` file at the repo root (used by [docker-compose.dev.yml](docker-compose.dev.yml)):
+
+```env
+# Application
+ENVIRONMENT=development
+SECRET_KEY=change-me
+
+# PostgreSQL
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ratinglift
+
+# MongoDB
+MONGO_URL=mongodb://admin:admin123@mongo:27017/ratinglift?authSource=admin
+
+# Redis
+REDIS_URL=redis://redis:6379/0
+
+# Mail (MailHog in dev)
+SMTP_HOST=mailhog
+SMTP_PORT=1025
+
+# CORS
+CORS_ORIGINS=http://localhost:3000
+```
+
+### 2. Start the dev stack
 
 ```bash
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-Services will be available at:
-- **Backend**: http://localhost:8000
-- **PostgreSQL**: localhost:5432
-- **MongoDB**: localhost:27017
-- **Redis**: localhost:6379
-- **pgAdmin**: http://localhost:8080
-- **Mongo Express**: http://localhost:8081
+The backend container automatically waits for PostgreSQL, runs `alembic upgrade head`, and then starts Uvicorn with hot-reload.
 
-### 2. Access API Documentation
+### 3. Open the API
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
+- **Health**: http://localhost:8000/health
 
-### 3. Test Health Endpoints
+---
 
-```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/ready
-curl http://localhost:8000/live
-```
+## Services
+
+| Service           | URL / Port             | Purpose                                        |
+|-------------------|------------------------|------------------------------------------------|
+| Backend (FastAPI) | http://localhost:8000  | API + docs                                     |
+| PostgreSQL        | `localhost:5432`       | Relational store                               |
+| MongoDB           | `localhost:27017`      | Document store                                 |
+| Redis             | `localhost:6379`       | Cache, queues, token blacklist                 |
+| pgAdmin           | http://localhost:8080  | PostgreSQL UI (`admin@admin.com` / `admin`)    |
+| Adminer           | http://localhost:8085  | Lightweight DB UI                              |
+| Mongo Express     | http://localhost:8088  | MongoDB UI (`admin` / `admin123`)              |
+| Redis Commander   | http://localhost:8082  | Redis UI                                       |
+| MailHog (SMTP)    | `localhost:1025`       | Catches outgoing email in dev                  |
+| MailHog (UI)      | http://localhost:8025  | View captured emails                           |
+
+---
 
 ## API Endpoints
 
-### Core Health Checks
-- `GET /health` - Application health status
-- `GET /ready` - Readiness probe (dependencies check)
-- `GET /live` - Liveness probe
+### Health
+- `GET /health` — application + dependency status
+- `GET /ready` — readiness probe
+- `GET /live` — liveness probe
 
-### Authentication (`/auth`)
-- `POST /auth/login` - User authentication
-- `POST /auth/logout` - Logout
-- `GET /auth/me` - Get current user info
+### Authentication (`/api/v1/auth`)
+
+| Method | Path                              | Description                           |
+|--------|-----------------------------------|---------------------------------------|
+| POST   | `/signup`                         | Create user + tenant                  |
+| POST   | `/login`                          | Password login                        |
+| POST   | `/refresh`                        | Refresh access token                  |
+| POST   | `/logout`                         | Revoke current token / refresh        |
+| GET    | `/me`                             | Current user profile                  |
+| POST   | `/social/google`                  | Google OAuth login                    |
+| POST   | `/social/microsoft`               | Microsoft OAuth login                 |
+| POST   | `/social/facebook`                | Facebook OAuth login                  |
+| POST   | `/password/forgot`                | Request password reset                |
+| POST   | `/password/reset`                 | Complete password reset               |
+| POST   | `/email/verify`                   | Verify email with token               |
+| POST   | `/email/resend`                   | Resend verification email             |
+| GET    | `/mfa/status`                     | MFA configuration                     |
+| POST   | `/mfa/channel`                    | Add MFA channel (email/SMS)           |
+| POST   | `/mfa/channel/verify`             | Verify added channel                  |
+| POST   | `/mfa/enable` / `/mfa/disable`    | Toggle MFA                            |
+| POST   | `/mfa/verify`                     | Complete MFA challenge during login   |
+| POST   | `/mfa/totp/setup`                 | Begin TOTP enrollment (QR/secret)     |
+| POST   | `/mfa/totp/verify`                | Confirm TOTP code                     |
+| GET    | `/sessions`                       | List active sessions                  |
+| POST   | `/sessions/{id}/revoke`           | Revoke a specific session             |
+
+### Admin Auth (`/api/v1/admin/auth`)
+- `POST /login` — admin-only login (rejects non-admin roles)
+- `POST /create-admin` — provision an admin (requires admin role)
+
+---
 
 ## Architecture
 
-### Core Features
-- **FastAPI** - Modern, fast web framework
-- **Async/Await** - Full async support
-- **CORS Middleware** - Cross-origin resource sharing
-- **Structured JSON Logging** - Production-ready logging with request/tenant context
-- **Request Context Middleware** - Automatic request ID and tenant ID tracking
-- **Exception Handlers** - Centralized error handling
-
-### Modular Design
-The application is organized into independent modules for scalability:
-
 ```
 app/
-├── main.py              # FastAPI application entry point
-├── core/                # Core framework utilities
-│   ├── config.py        # Settings with pydantic-settings
+├── main.py              # FastAPI entry point + lifespan + health
+├── core/                # Framework infrastructure
+│   ├── config.py        # pydantic-settings configuration
 │   ├── logging.py       # JSON structured logging
-│   ├── middleware.py    # Request context (X-Request-ID, X-Tenant-ID)
-│   ├── security.py      # Password hashing & crypto
-│   ├── dependencies.py  # FastAPI dependency injection
-│   ├── exceptions.py    # Exception handlers
-│   └── __init__.py
-├── db/                  # Database layer
+│   ├── middleware.py    # X-Request-ID / X-Tenant-ID context
+│   ├── security.py      # Password hashing, crypto helpers
+│   ├── dependencies.py  # Shared FastAPI dependencies
+│   └── exceptions.py    # Centralized exception handlers
+├── db/
 │   ├── base.py          # SQLAlchemy declarative base
-│   ├── session.py       # Database connection & session
-│   ├── models/          # ORM models
-│   └── __init__.py
-├── modules/             # Business logic (domain-driven)
-│   ├── auth/            # Authentication & authorization
-│   ├── tenant/          # Multi-tenancy support
+│   ├── session.py       # Engine + SessionLocal
+│   ├── mongo.py         # Mongo client
+│   ├── redis.py         # Redis client
+│   ├── seed.py          # Idempotent startup seeders
+│   └── models/          # ORM models (user, tenant, property,
+│                        #   subscription, invoice, connector,
+│                        #   property_connector, login_session,
+│                        #   audit_log)
+├── modules/             # Domain-driven business modules
+│   ├── auth/            # Routes, service, tokens, MFA, TOTP,
+│   │                    #   OAuth, password reset, validators,
+│   │                    #   senders, bootstrap
+│   ├── tenant/          # Multi-tenancy
 │   ├── property/        # Property management
-│   ├── review/          # Review system
+│   ├── review/          # Reviews ingestion / responses
 │   ├── ai/              # AI/ML services
-│   ├── recovery/        # Data recovery & backups
 │   ├── analytics/       # Analytics & reporting
-│   ├── billing/         # Payment & billing
+│   ├── billing/         # Subscriptions & invoices
 │   ├── support/         # Support tickets
+│   ├── recovery/        # Backup & recovery
 │   ├── admin/           # Admin operations
 │   └── monitoring/      # System monitoring
-├── shared/              # Cross-cutting utilities
-│   ├── schemas.py       # Pydantic response models
-│   ├── exceptions.py    # Custom exception classes
-│   └── utils.py         # Utility functions
-└── workers/             # Background jobs & tasks
-    ├── review_worker.py # Review processing
-    ├── ai_worker.py     # AI job queue
-    └── posting_worker.py # Content posting queue
+├── shared/              # Cross-cutting schemas, utils, errors
+└── workers/             # Background workers
+    ├── review_worker.py
+    ├── ai_worker.py
+    └── posting_worker.py
+
+alembic/                 # Database migrations
+tests/                   # pytest test suite
 ```
 
-## Configuration
+### Key features
+- **FastAPI** with async lifespan, CORS, and centralized exception handlers
+- **Multi-database**: PostgreSQL (SQLAlchemy + Alembic), MongoDB (PyMongo), Redis
+- **Auth stack**: bcrypt password hashing, JWT (access + refresh), session tracking, MFA channels, TOTP (`pyotp`), social login (Google / Microsoft / Facebook), password reset, email verification, RBAC via `require_role`
+- **Audit log** + **login session** tracking with IP, device, and location capture
+- **Twilio + SMTP** senders (MailHog used in dev)
+- **Structured JSON logs** with `request_id` and `tenant_id` context
 
-### Environment Variables
-
-Create a `.env.dev` file:
-
-```env
-# Database
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ratinglift
-
-# NoSQL
-MONGO_URL=mongodb://mongo:27017/ratinglift
-
-# Cache & Queue
-REDIS_URL=redis://redis:6379/0
-
-# Application
-ENVIRONMENT=development
-```
-
-### Services in Docker Compose
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| Backend | 8000 | FastAPI application |
-| PostgreSQL | 5432 | Relational database |
-| MongoDB | 27017 | Document database |
-| Redis | 6379 | Cache & queue |
-| pgAdmin | 8080 | PostgreSQL management |
-| Mongo Express | 8081 | MongoDB management |
+---
 
 ## Development
 
-### Running Tests
+### Local setup (without Docker)
 
 ```bash
-# Install test dependencies
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# Run all tests
-pytest
+# Apply migrations against your local DB
+alembic upgrade head
 
-# Run specific test file
-pytest tests/test_health.py
-
-# Run with coverage
-pytest --cov=app tests/
-```
-
-### Local Setup (without Docker)
-
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
+# Run the API
 uvicorn app.main:app --reload
 ```
 
+### Database migrations
+
+```bash
+# Create a new migration after model changes
+alembic revision --autogenerate -m "describe change"
+
+# Apply migrations
+alembic upgrade head
+
+# Roll back one revision
+alembic downgrade -1
+```
+
+### Tests
+
+```bash
+pytest                                  # full suite
+pytest tests/test_auth_integration.py   # single file
+pytest --cov=app tests/                 # with coverage
+```
+
+Existing test modules:
+- [tests/test_health.py](tests/test_health.py) — health endpoints
+- [tests/test_auth_integration.py](tests/test_auth_integration.py) — end-to-end auth flows
+- [tests/test_auth_extensions.py](tests/test_auth_extensions.py) — MFA / TOTP / sessions
+- [tests/test_auth_validation.py](tests/test_auth_validation.py) — schema validation
+- [tests/test_seed.py](tests/test_seed.py) — seeders
+
 ### Logging
 
-The application uses **structured JSON logging** for production readiness:
+All logs are emitted as JSON, e.g.:
 
 ```json
 {
-  "timestamp": "2026-04-06T12:00:00",
+  "timestamp": "2026-04-18T12:00:00Z",
   "level": "INFO",
   "logger": "app.main",
   "message": "application_startup",
@@ -176,41 +224,37 @@ The application uses **structured JSON logging** for production readiness:
 }
 ```
 
-Each request automatically includes:
-- `request_id` - Unique request identifier (X-Request-ID header)
-- `tenant_id` - Tenant context (X-Tenant-ID header)
+Each request automatically includes `request_id` (from / generated for `X-Request-ID`) and `tenant_id` (from `X-Tenant-ID`).
 
-## Production Deployment
-
-### Security Checklist
-- [ ] Update `CORS_ORIGINS` in config
-- [ ] Use environment-specific `.env` files
-- [ ] Enable HTTPS/TLS
-- [ ] Set strong database passwords
-- [ ] Configure rate limiting
-- [ ] Enable API authentication
-- [ ] Set up monitoring & alerting
-- [ ] Configure log aggregation
-
-### Scaling
-- Use load balancer (nginx, AWS ALB)
-- Scale backend instances
-- Use managed databases (AWS RDS, MongoDB Atlas)
-- Cache with Redis Cluster
-- Set up container orchestration (Kubernetes)
+---
 
 ## Tech Stack
 
-- **Framework**: FastAPI 0.104+
-- **Server**: Uvicorn
-- **ORM**: SQLAlchemy
-- **Database**: PostgreSQL + MongoDB
-- **Cache**: Redis
-- **Auth**: Passlib + bcrypt
-- **Validation**: Pydantic v2
-- **Testing**: pytest + pytest-asyncio
-- **Logging**: Structured JSON
-- **Containerization**: Docker
+- **Framework**: FastAPI + Uvicorn
+- **ORM / Migrations**: SQLAlchemy + Alembic
+- **Databases**: PostgreSQL 15, MongoDB 6, Redis 7
+- **Auth**: bcrypt, PyJWT, pyotp (TOTP), Twilio (SMS), email-validator
+- **HTTP**: httpx, requests
+- **Validation**: Pydantic v2 + pydantic-settings
+- **Testing**: pytest, pytest-asyncio
+- **Containerization**: Docker + Docker Compose
+
+---
+
+## Production Checklist
+
+- [ ] Set strong `SECRET_KEY` and database credentials
+- [ ] Restrict `CORS_ORIGINS` to known frontends
+- [ ] Terminate TLS at the load balancer (nginx / ALB)
+- [ ] Use managed datastores (RDS, MongoDB Atlas, ElastiCache)
+- [ ] Configure real SMTP / Twilio credentials (replace MailHog)
+- [ ] Configure OAuth client IDs/secrets for Google, Microsoft, Facebook
+- [ ] Enable rate limiting and WAF
+- [ ] Centralize logs (ELK / Loki / CloudWatch) and metrics
+- [ ] Run `alembic upgrade head` in deploy pipeline
+- [ ] Container orchestration (Kubernetes / ECS) with health & readiness probes
+
+---
 
 ## License
 
