@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
-from app.core.middleware import RequestContextMiddleware
+from app.core.middleware import RequestContextMiddleware, TenantContextMiddleware
 from app.core.exceptions import register_exception_handlers
 from app.modules.auth.routes import router as auth_router
 from sqlalchemy import text
@@ -47,6 +47,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestContextMiddleware)
+app.add_middleware(TenantContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
