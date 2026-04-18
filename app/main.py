@@ -1,15 +1,41 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.core.middleware import RequestContextMiddleware
 from app.core.exceptions import register_exception_handlers
-from app.modules.auth.router import router as auth_router
+from app.modules.auth.routes import router as auth_router
 from sqlalchemy import text
 
 setup_logging()
 logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("application_startup")
+    from app.db.base import Base
+    from app.db.session import engine
+    Base.metadata.create_all(bind=engine)
+    logger.info("database_tables_created")
+
+    # Run DB seeders (idempotent, safe on every startup)
+    try:
+        from app.db.seed import run_seeders
+        run_seeders()
+    except Exception as exc:  # pragma: no cover - best-effort seeding
+        logger.error("seeders_failed error=%s", exc)
+
+    try:
+        yield
+    finally:
+        logger.info("application_shutdown")
+        from app.db.mongo import close_mongo_connection
+        close_mongo_connection()
+        logger.info("database_connections_closed")
+
 
 app = FastAPI(
     title="ratinglift-backend-core",
@@ -17,6 +43,7 @@ app = FastAPI(
     description="Core backend for RatingLift with health checks, observability, and modular services.",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(RequestContextMiddleware)
@@ -32,23 +59,6 @@ register_exception_handlers(app)
 
 # Include routers
 app.include_router(auth_router)
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("application_startup")
-    # Initialize database tables
-    from app.db.base import Base
-    from app.db.session import engine
-    Base.metadata.create_all(bind=engine)
-    logger.info("database_tables_created")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("application_shutdown")
-    # Close database connections
-    from app.db.mongo import close_mongo_connection
-    close_mongo_connection()
-    logger.info("database_connections_closed")
 
 @app.get("/")
 async def root():

@@ -8,8 +8,12 @@ redis
 python-dotenv
 pydantic
 pydantic-settings
-passlib[bcrypt]
+bcrypt>=4.0,<5.0
+PyJWT
+email-validator
 httpx
 requests
+pyotp
+twilio
 pytest
 pytest-asyncio
