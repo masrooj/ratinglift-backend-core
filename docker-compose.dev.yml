@@ -104,9 +104,19 @@ services:
     networks:
       - ratinglift-network
 
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    networks:
+      - ratinglift-network
+
   redis:
     image: redis:7-alpine
-    container_name: ratinglift-redis
+    container_name: redis
     restart: unless-stopped
     ports:
       - "6379:6379"
