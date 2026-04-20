@@ -32,7 +32,7 @@ from app.modules.admin.schemas import (
     SimpleMessage,
 )
 from app.modules.audit import log_admin_action
-from app.modules.auth.service import require_role
+from app.modules.auth.service import oauth2_scheme, require_role
 from app.modules.security import block_ip, unblock_ip
 
 # Roles that can READ audit/security data.
@@ -51,6 +51,7 @@ MUTATE_ROLES = [
 admin_audit_router = APIRouter(
     prefix="/api/v1/admin",
     tags=["admin-audit"],
+    dependencies=[Depends(oauth2_scheme)],
 )
 
 

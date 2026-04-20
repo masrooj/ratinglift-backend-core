@@ -90,3 +90,39 @@ class IpBlockCreateRequest(BaseModel):
 
 class SimpleMessage(BaseModel):
     message: str
+
+
+# --------------------------- tenants & properties (admin views) ---------------------------
+
+
+class AdminTenantItem(BaseModel):
+    id: UUID
+    name: str
+    plan: str
+    status: str
+    created_at: datetime
+    property_count: int = 0
+
+
+class AdminTenantList(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    items: list[AdminTenantItem]
+
+
+class AdminPropertyItem(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    name: str
+    google_place_id: str | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+class AdminPropertyList(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    items: list[AdminPropertyItem]
