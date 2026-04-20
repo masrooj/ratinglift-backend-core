@@ -7,6 +7,7 @@ from app.core.logging import setup_logging, get_logger
 from app.core.middleware import RequestContextMiddleware, TenantContextMiddleware
 from app.core.exceptions import register_exception_handlers
 from app.modules.auth.routes import router as auth_router
+from app.modules.admin.audit_routes import admin_audit_router
 from sqlalchemy import text
 
 setup_logging()
@@ -60,6 +61,7 @@ register_exception_handlers(app)
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(admin_audit_router)
 
 @app.get("/")
 async def root():

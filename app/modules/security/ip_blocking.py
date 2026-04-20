@@ -55,7 +55,11 @@ def ensure_ip_allowed(db: Session, ip_address: str | None) -> None:
         logger.warning("ip_blocked_request ip=%s", ip_address)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your IP has been temporarily blocked due to suspicious activity.",
+            detail=(
+                "Your IP address has been temporarily blocked due to repeated "
+                "failed sign-in attempts. Please wait and try again later, or "
+                "contact support if you believe this is a mistake."
+            ),
         )
 
 
