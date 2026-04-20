@@ -8,6 +8,8 @@ from app.core.middleware import RequestContextMiddleware, TenantContextMiddlewar
 from app.core.exceptions import register_exception_handlers
 from app.modules.auth.routes import router as auth_router
 from app.modules.admin.audit_routes import admin_audit_router
+from app.modules.admin.property_routes import admin_property_router
+from app.modules.property import property_router
 from sqlalchemy import text
 
 setup_logging()
@@ -62,6 +64,8 @@ register_exception_handlers(app)
 # Include routers
 app.include_router(auth_router)
 app.include_router(admin_audit_router)
+app.include_router(admin_property_router)
+app.include_router(property_router)
 
 @app.get("/")
 async def root():

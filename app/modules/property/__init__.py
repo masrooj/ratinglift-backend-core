@@ -1,1 +1,6 @@
-"""$module module placeholder for RatingLift backend."""
+"""Property management module."""
+
+from app.modules.property.routes import property_router
+
+__all__ = ["property_router"]
+
