@@ -143,20 +143,43 @@ class AuthService:
         ip_address: str | None,
         user: User | None,
         reason: str | None = None,
+        user_agent: str | None = None,
     ) -> None:
-        event = AuditLog(
+        # Persistent security tracking row (login_attempts table).
+        from app.modules.security.login_tracking import record_login_attempt
+        from app.modules.security.ip_blocking import register_failed_attempt_for_ip
+
+        record_login_attempt(
+            self.db,
+            email=email,
+            ip_address=ip_address,
+            success=success,
+            reason=reason,
+            user_agent=user_agent,
+        )
+
+        # General audit log entry via reusable helper.
+        from app.modules.audit import log_action
+
+        log_action(
+            self.db,
             actor_id=user.id if user else None,
-            actor_type=ActorType.user if user else ActorType.system,
-            action="login_attempt",
+            actor_type="user" if user else "system",
+            action="login_success" if success else "login_failure",
             entity="auth",
+            entity_id=user.id if user else None,
             after_value={
                 "email": email,
                 "success": success,
                 "reason": reason,
             },
             ip_address=ip_address,
+            flush=False,
         )
-        self.db.add(event)
+
+        # If this failure pushes the IP over the threshold, block it.
+        if not success and ip_address:
+            register_failed_attempt_for_ip(self.db, ip_address)
 
     def _track_failed_login(self, user: User | None, email: str) -> None:
         if user:
@@ -364,6 +387,10 @@ class AuthService:
         location: str | None,
         admin_only: bool,
     ) -> AuthResponse:
+        from app.modules.security.ip_blocking import ensure_ip_allowed
+
+        ensure_ip_allowed(self.db, ip_address)
+
         normalized_email = email.lower()
         limiter_id = f"{normalized_email}:{ip_address or 'unknown'}"
         self._check_login_rate_limit("admin" if admin_only else "user", limiter_id)

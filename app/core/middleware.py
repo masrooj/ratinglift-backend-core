@@ -74,14 +74,40 @@ def _extract_bearer(request: Request) -> str | None:
     return token or None
 
 
+def _client_ip(request: Request) -> str | None:
+    """Resolve the originating client IP, honouring ``X-Forwarded-For``."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        first = xff.split(",")[0].strip()
+        if first:
+            return first
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    if request.client:
+        return request.client.host
+    return None
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
-    """Assigns a request id and echoes the legacy tenant header."""
+    """Assigns a request id, captures security context, and echoes the legacy tenant header.
+
+    Populates ``request.state``:
+      * ``request_id``      — UUID from header or freshly generated.
+      * ``ip_address``      — best-effort client IP.
+      * ``user_agent``      — raw ``User-Agent`` header.
+      * ``request_path``    — URL path of the incoming request.
+      * ``tenant_id``       — legacy ``X-Tenant-ID`` if no JWT context.
+    """
 
     async def dispatch(self, request: Request, call_next):
         request_id = request.headers.get("X-Request-ID", str(uuid4()))
         legacy_tenant_header = request.headers.get("X-Tenant-ID", "anonymous")
 
         request.state.request_id = request_id
+        request.state.ip_address = _client_ip(request)
+        request.state.user_agent = request.headers.get("user-agent")
+        request.state.request_path = request.url.path
         # Only set the legacy tenant id if ``TenantContextMiddleware`` hasn't
         # already populated it from a JWT. Avoids clobbering authenticated
         # context with the anonymous header default.
