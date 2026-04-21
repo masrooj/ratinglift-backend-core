@@ -41,6 +41,7 @@ PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
     "/health",
     "/ready",
     "/live",
+    "/media",
 )
 
 _PUBLIC_EXACT_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready", "/live"}

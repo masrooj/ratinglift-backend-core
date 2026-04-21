@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from pathlib import Path
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.core.middleware import RequestContextMiddleware, TenantContextMiddleware
@@ -9,6 +11,8 @@ from app.core.exceptions import register_exception_handlers
 from app.modules.auth.routes import router as auth_router
 from app.modules.admin.audit_routes import admin_audit_router
 from app.modules.admin.property_routes import admin_property_router
+from app.modules.admin.connectors import admin_connector_router
+from app.modules.connectors import tenant_connector_router
 from app.modules.property import property_router
 from sqlalchemy import text
 
@@ -61,10 +65,25 @@ app.add_middleware(
 
 register_exception_handlers(app)
 
+# Serve uploaded media (logos, etc.) from a local volume — only when the
+# storage backend is the local filesystem. With ``STORAGE_BACKEND=s3`` the
+# files live in the bucket and are served directly (or via CDN), so the
+# app should not also expose ``/media``.
+if (settings.storage_backend or "local").lower() == "local":
+    _media_dir = Path(settings.media_root).resolve()
+    _media_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        settings.media_url_prefix,
+        StaticFiles(directory=str(_media_dir)),
+        name="media",
+    )
+
 # Include routers
 app.include_router(auth_router)
 app.include_router(admin_audit_router)
 app.include_router(admin_property_router)
+app.include_router(admin_connector_router)
+app.include_router(tenant_connector_router)
 app.include_router(property_router)
 
 @app.get("/")

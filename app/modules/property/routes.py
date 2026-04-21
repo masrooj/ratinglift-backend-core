@@ -325,3 +325,4 @@ def get_property_audit_endpoint(
         offset=offset,
         items=[PropertyAuditEntry.model_validate(r) for r in rows],
     )
+

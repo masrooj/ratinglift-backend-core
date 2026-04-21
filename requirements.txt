@@ -17,3 +17,7 @@ pyotp
 twilio
 pytest
 pytest-asyncio
+pytest-cov
+python-multipart
+Pillow
+boto3>=1.34
