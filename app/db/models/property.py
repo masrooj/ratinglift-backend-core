@@ -12,6 +12,10 @@ class Property(Base):
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False, index=True)
     name = Column(String, nullable=False)
     google_place_id = Column(String, nullable=True)
+    # Public Google Maps URL for this property (e.g. the share link). Stored
+    # so the tenant UI can render a "View on Google Maps" link / embed
+    # without having to construct it from the place_id every time.
+    google_maps_url = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(

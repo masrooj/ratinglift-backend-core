@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 _GOOGLE_PLACE_ID_PATTERN = r"^[A-Za-z0-9_-]{10,255}$"
 
 _EXAMPLE_PLACE_ID = "ChIJN1t_tDeuEmsRUsoyG83frY4"
+_EXAMPLE_MAPS_URL = "https://maps.app.goo.gl/abcdef123456"
 
 
 def _validate_place_id(value: str | None) -> str | None:
@@ -30,22 +31,60 @@ def _validate_place_id(value: str | None) -> str | None:
     return value
 
 
+def _validate_maps_url(value: str | None) -> str | None:
+    """Light validation — must be an http(s) URL pointing at Google Maps.
+
+    We deliberately do not parse the route/query fragments because Google
+    has many shapes (``maps.app.goo.gl`` short links, ``www.google.com/maps``
+    canonical links, embed iframes...). Tenants paste whatever the share
+    sheet gives them.
+    """
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    lowered = value.lower()
+    if not (lowered.startswith("http://") or lowered.startswith("https://")):
+        raise ValueError("google_maps_url must be an http(s) URL")
+    if (
+        "google.com/maps" not in lowered
+        and "goo.gl/maps" not in lowered
+        and "maps.app.goo.gl" not in lowered
+    ):
+        raise ValueError(
+            "google_maps_url must point at google.com/maps, goo.gl/maps, "
+            "or maps.app.goo.gl"
+        )
+    return value
+
+
 class PropertyCreate(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
-                {"name": "Acme Coffee \u2014 Downtown", "google_place_id": _EXAMPLE_PLACE_ID}
+                {
+                    "name": "Acme Coffee \u2014 Downtown",
+                    "google_place_id": _EXAMPLE_PLACE_ID,
+                    "google_maps_url": _EXAMPLE_MAPS_URL,
+                }
             ]
         }
     )
 
     name: str = Field(..., min_length=1, max_length=255)
     google_place_id: str | None = Field(default=None, max_length=255)
+    google_maps_url: str | None = Field(default=None, max_length=2048)
 
     @field_validator("google_place_id")
     @classmethod
     def _check_place_id(cls, v: str | None) -> str | None:
         return _validate_place_id(v)
+
+    @field_validator("google_maps_url")
+    @classmethod
+    def _check_maps_url(cls, v: str | None) -> str | None:
+        return _validate_maps_url(v)
 
 
 class PropertyUpdate(BaseModel):
@@ -54,6 +93,7 @@ class PropertyUpdate(BaseModel):
             "examples": [
                 {"name": "Acme Coffee \u2014 Renamed"},
                 {"google_place_id": _EXAMPLE_PLACE_ID},
+                {"google_maps_url": _EXAMPLE_MAPS_URL},
                 {"is_active": False},
             ]
         }
@@ -61,12 +101,18 @@ class PropertyUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     google_place_id: str | None = Field(default=None, max_length=255)
+    google_maps_url: str | None = Field(default=None, max_length=2048)
     is_active: bool | None = None
 
     @field_validator("google_place_id")
     @classmethod
     def _check_place_id(cls, v: str | None) -> str | None:
         return _validate_place_id(v)
+
+    @field_validator("google_maps_url")
+    @classmethod
+    def _check_maps_url(cls, v: str | None) -> str | None:
+        return _validate_maps_url(v)
 
 
 class PropertyResponse(BaseModel):
@@ -78,6 +124,7 @@ class PropertyResponse(BaseModel):
                     "id": "1f3a4b6c-1234-4abc-9def-0123456789ab",
                     "name": "Acme Coffee \u2014 Downtown",
                     "google_place_id": _EXAMPLE_PLACE_ID,
+                    "google_maps_url": _EXAMPLE_MAPS_URL,
                     "is_active": True,
                     "created_at": "2026-04-20T10:00:00Z",
                     "updated_at": "2026-04-20T10:00:00Z",
@@ -89,6 +136,7 @@ class PropertyResponse(BaseModel):
     id: UUID
     name: str
     google_place_id: str | None = None
+    google_maps_url: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime | None = None

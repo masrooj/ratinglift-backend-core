@@ -46,6 +46,7 @@ def _snapshot(prop: Property) -> dict[str, Any]:
         "tenant_id": str(prop.tenant_id) if prop.tenant_id is not None else None,
         "name": prop.name,
         "google_place_id": prop.google_place_id,
+        "google_maps_url": prop.google_maps_url,
         "is_active": prop.is_active,
     }
 
@@ -69,6 +70,7 @@ def create_property(
         tenant_id=_coerce_uuid(ctx.tenant_id),
         name=payload.name,
         google_place_id=payload.google_place_id,
+        google_maps_url=payload.google_maps_url,
         is_active=True,
     )
     db.add(prop)
@@ -150,6 +152,8 @@ def update_property(
         prop.name = data["name"]
     if "google_place_id" in data:
         prop.google_place_id = data["google_place_id"]
+    if "google_maps_url" in data:
+        prop.google_maps_url = data["google_maps_url"]
     if "is_active" in data and data["is_active"] is not None:
         prop.is_active = bool(data["is_active"])
 
