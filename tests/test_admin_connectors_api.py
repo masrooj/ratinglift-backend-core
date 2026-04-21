@@ -1376,6 +1376,151 @@ def test_tenant_connectors_returns_only_active(monkeypatch):
         _clear()
 
 
+def test_tenant_connectors_with_property_id_enriches_binding_state(monkeypatch):
+    """Property tab calls ``?property_id=`` to render Connect/Disconnect/Reactivate.
+
+    * Connector A has an active binding   → ``is_connected=True``.
+    * Connector B has an inactive binding → ``property_connector_id`` set,
+      ``is_connected=False`` (UI renders "Reactivate").
+    * Connector C has no binding          → both fields stay null/false
+      (UI renders "Connect").
+    """
+    from app.db.models.property import Property
+    from app.db.models.property_connector import PropertyConnector
+
+    conn_a = _make_connector("Google")
+    conn_b = _make_connector("Yelp")
+    conn_c = _make_connector("Facebook")
+
+    monkeypatch.setattr(
+        connector_service,
+        "list_connectors",
+        lambda db, **kw: ([conn_a, conn_b, conn_c], 3),
+    )
+
+    property_id = uuid4()
+    tenant_id = str(uuid4())
+
+    pc_a = PropertyConnector()
+    pc_a.id = uuid4()
+    pc_a.property_id = property_id
+    pc_a.connector_id = conn_a.id
+    pc_a.is_active = True
+
+    pc_b = PropertyConnector()
+    pc_b.id = uuid4()
+    pc_b.property_id = property_id
+    pc_b.connector_id = conn_b.id
+    pc_b.is_active = False
+
+    owned = Property()
+    owned.id = property_id
+
+    class _Q:
+        def __init__(self, db, model):
+            self._db = db
+            self._model = model
+
+        def filter(self, *_a, **_kw):
+            return self
+
+        def first(self):
+            return self._db._owned if self._model is Property else None
+
+        def all(self):
+            return self._db._bindings if self._model is PropertyConnector else []
+
+    class _DB:
+        _owned = owned
+        _bindings = [pc_a, pc_b]
+
+        def query(self, model, *_a, **_kw):
+            return _Q(self, model)
+
+    app.dependency_overrides[get_db] = lambda: _DB()
+    try:
+        client = TestClient(app)
+        resp = client.get(
+            f"/api/v1/tenant/connectors?property_id={property_id}",
+            headers=_bearer(_tenant_token(tenant_id=tenant_id)),
+        )
+        assert resp.status_code == 200, resp.text
+        items = {i["name"]: i for i in resp.json()["items"]}
+
+        assert items["Google"]["is_connected"] is True
+        assert items["Google"]["property_connector_id"] == str(pc_a.id)
+
+        assert items["Yelp"]["is_connected"] is False
+        assert items["Yelp"]["property_connector_id"] == str(pc_b.id)
+
+        assert items["Facebook"]["is_connected"] is False
+        assert items["Facebook"]["property_connector_id"] is None
+    finally:
+        _clear()
+
+
+def test_tenant_connectors_property_id_404_when_not_owned(monkeypatch):
+    """Tenant cannot probe binding state for someone else's property."""
+    from app.db.models.property import Property
+    from app.db.models.property_connector import PropertyConnector
+
+    monkeypatch.setattr(
+        connector_service,
+        "list_connectors",
+        lambda db, **kw: ([_make_connector("Google")], 1),
+    )
+
+    class _Q:
+        def filter(self, *_a, **_kw):
+            return self
+
+        def first(self):
+            return None
+
+        def all(self):
+            return []
+
+    class _DB:
+        def query(self, *_a, **_kw):
+            return _Q()
+
+    app.dependency_overrides[get_db] = lambda: _DB()
+    try:
+        client = TestClient(app)
+        resp = client.get(
+            f"/api/v1/tenant/connectors?property_id={uuid4()}",
+            headers=_bearer(_tenant_token(tenant_id=str(uuid4()))),
+        )
+        assert resp.status_code == 404, resp.text
+    finally:
+        _clear()
+
+
+def test_tenant_connectors_without_property_id_omits_binding_state(monkeypatch):
+    """Backwards compatibility: unscoped catalog call returns plain items."""
+    monkeypatch.setattr(
+        connector_service,
+        "list_connectors",
+        lambda db, **kw: ([_make_connector("Google")], 1),
+    )
+
+    db = MagicMock()
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app)
+        resp = client.get(
+            "/api/v1/tenant/connectors",
+            headers=_bearer(_tenant_token(tenant_id=str(uuid4()))),
+        )
+        assert resp.status_code == 200, resp.text
+        item = resp.json()["items"][0]
+        # Schema defaults: never connected, no binding.
+        assert item["is_connected"] is False
+        assert item["property_connector_id"] is None
+    finally:
+        _clear()
+
+
 def test_tenant_connectors_requires_tenant_context(monkeypatch):
     monkeypatch.setattr(
         connector_service,

@@ -76,12 +76,26 @@ class TenantConnectorResponse(_LogoSerializer):
     Deliberately omits ``is_deleted`` / ``deleted_at`` — tenants only see
     live, active connectors so those fields would always be false/null
     and only add noise.
+
+    When the catalog is queried with ``?property_id=<uuid>`` the route
+    enriches each item with the per-property binding state so the UI can
+    render the correct CTA without a second round-trip:
+
+    * ``property_connector_id`` is ``None`` when the property has never
+      been connected to this source; otherwise it's the binding row id.
+    * ``is_connected`` is ``True`` only when a binding row exists AND is
+      currently active. UI mapping:
+      ``is_connected`` → "Disconnect";
+      ``property_connector_id`` set + ``is_connected=False`` → "Reactivate";
+      neither → "Connect".
     """
 
     id: UUID
     name: str
     logo_url: str | None = None
     display_order: int = 0
+    property_connector_id: UUID | None = None
+    is_connected: bool = False
 
     model_config = {"from_attributes": True}
 

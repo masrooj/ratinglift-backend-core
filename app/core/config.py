@@ -54,6 +54,14 @@ class Settings(BaseSettings):
     s3_url_base: str | None = Field(default=None, alias="S3_URL_BASE")
     s3_key_prefix: str = Field(default="", alias="S3_KEY_PREFIX")
 
+    # Symmetric key used to encrypt connector ``api_secret`` values at rest.
+    # In production set CONNECTOR_SECRET_KEY to a stable high-entropy value
+    # (rotation requires re-encrypting existing rows). Falls back to
+    # ``jwt_secret`` for development convenience.
+    connector_secret_key: str | None = Field(
+        default=None, alias="CONNECTOR_SECRET_KEY"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env.dev",
         populate_by_name=True,

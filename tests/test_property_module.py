@@ -65,6 +65,7 @@ class FakeProperty:
     name: str
     tenant_id: UUID
     google_place_id: str | None = None
+    google_maps_url: str | None = None
     is_active: bool = True
     id: UUID = field(default_factory=uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

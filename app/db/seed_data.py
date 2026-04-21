@@ -39,9 +39,9 @@ class AdminSeed:
 #   BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD, BOOTSTRAP_ADMIN_FULL_NAME
 ADMINS: list[AdminSeed] = [
     AdminSeed(
-        email=_env("BOOTSTRAP_ADMIN_EMAIL", "admin@ratinglift.io") or "admin@ratinglift.io",
-        password=_env("BOOTSTRAP_ADMIN_PASSWORD", "ChangeMe_Admin#2026") or "ChangeMe_Admin#2026",
-        full_name=_env("BOOTSTRAP_ADMIN_FULL_NAME", "Platform Super Admin") or "Platform Super Admin",
+        email=_env("BOOTSTRAP_ADMIN_EMAIL") or "",
+        password=_env("BOOTSTRAP_ADMIN_PASSWORD") or "",
+        full_name=_env("BOOTSTRAP_ADMIN_FULL_NAME") or "",
         role="SUPER_ADMIN",
     ),
 ]
