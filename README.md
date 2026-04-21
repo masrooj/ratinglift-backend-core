@@ -241,6 +241,62 @@ Each request automatically includes `request_id` (from / generated for `X-Reques
 
 ---
 
+## File storage (logos & uploads)
+
+The connector logo upload flow (and any future media upload) goes through
+a pluggable storage backend selected by the `STORAGE_BACKEND` env var.
+
+### Local (default — recommended for dev)
+
+```env
+STORAGE_BACKEND=local
+MEDIA_ROOT=media
+MEDIA_URL_PREFIX=/media
+```
+
+Files are written to `./media/` and served by FastAPI at `/media/...`.
+Nothing else to configure.
+
+### S3 (production)
+
+```env
+STORAGE_BACKEND=s3
+S3_BUCKET=ratinglift-media-prod
+S3_REGION=us-east-1
+S3_URL_BASE=https://cdn.ratinglift.com   # optional CloudFront/custom domain
+S3_KEY_PREFIX=prod                       # optional namespace per env
+AWS_ACCESS_KEY_ID=...                    # or use IAM role on the host
+AWS_SECRET_ACCESS_KEY=...
+```
+
+Switching is purely a config change — **no code changes required**. The
+`/media` static mount is automatically disabled when `STORAGE_BACKEND=s3`,
+so the bucket (or CloudFront in front of it) is the only place files are
+served from.
+
+### Migrating existing local files to S3
+
+After flipping `STORAGE_BACKEND` to `s3` and setting the `S3_*` vars,
+run the one-shot backfill **before restarting** the production app so
+no live request sees a broken `/media/...` URL:
+
+```bash
+python -m app.scripts.backfill_logos_to_storage
+```
+
+The script:
+
+- Walks every `connectors` row whose `logo_url` still points at the old
+  local mount.
+- Uploads the file bytes to the active backend (S3).
+- Rewrites `logo_url` to the new public URL returned by the backend.
+- Is idempotent — re-running skips rows that already point at S3.
+
+You can drop the local `./media` volume from your container/compose file
+once the backfill has run successfully.
+
+---
+
 ## Production Checklist
 
 - [ ] Set strong `SECRET_KEY` and database credentials
@@ -252,6 +308,9 @@ Each request automatically includes `request_id` (from / generated for `X-Reques
 - [ ] Enable rate limiting and WAF
 - [ ] Centralize logs (ELK / Loki / CloudWatch) and metrics
 - [ ] Run `alembic upgrade head` in deploy pipeline
+- [ ] If switching to S3 storage: set `STORAGE_BACKEND=s3` + `S3_*` vars,
+      then run `python -m app.scripts.backfill_logos_to_storage` before
+      restarting the app. Remove the `./media` volume after.
 - [ ] Container orchestration (Kubernetes / ECS) with health & readiness probes
 
 ---

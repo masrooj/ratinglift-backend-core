@@ -36,6 +36,24 @@ class Settings(BaseSettings):
     twilio_from_number: str | None = Field(default=None, alias="TWILIO_FROM_NUMBER")
     cors_origins: list[str] = ["*"]
 
+    # Media / file uploads
+    media_root: str = Field(default="media", alias="MEDIA_ROOT")
+    media_url_prefix: str = Field(default="/media", alias="MEDIA_URL_PREFIX")
+    connector_logo_max_bytes: int = Field(
+        default=2 * 1024 * 1024, alias="CONNECTOR_LOGO_MAX_BYTES"
+    )
+    connector_logo_max_pixels: int = Field(
+        default=2000, alias="CONNECTOR_LOGO_MAX_PIXELS"
+    )
+
+    # Storage backend selection. ``local`` writes to MEDIA_ROOT and serves
+    # via /media; ``s3`` targets the S3 bucket (implementation pending).
+    storage_backend: str = Field(default="local", alias="STORAGE_BACKEND")
+    s3_bucket: str | None = Field(default=None, alias="S3_BUCKET")
+    s3_region: str | None = Field(default=None, alias="S3_REGION")
+    s3_url_base: str | None = Field(default=None, alias="S3_URL_BASE")
+    s3_key_prefix: str = Field(default="", alias="S3_KEY_PREFIX")
+
     model_config = SettingsConfigDict(
         env_file=".env.dev",
         populate_by_name=True,

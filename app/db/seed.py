@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
 from app.db.session import SessionLocal
+from app.db.seeders.connectors import seed_connectors
 from app.modules.auth.bootstrap import seed_admins
 
 logger = get_logger(__name__)
@@ -26,6 +27,7 @@ Seeder = Callable[[Session], object]
 # Register new seeders here. Each one is called with a shared Session.
 SEEDERS: list[tuple[str, Seeder]] = [
     ("admins", seed_admins),
+    ("connectors", seed_connectors),
 ]
 
 
